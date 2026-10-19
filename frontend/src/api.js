@@ -1,4 +1,12 @@
 // API client — all calls to the FastAPI backend
+
+export async function apiLogin({ email, password }) {
+  return fetchJSON(`${BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+}
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
 const BASE = BACKEND_URL ? `${BACKEND_URL}/api` : '/api';
 
@@ -105,13 +113,14 @@ export async function apiRegister({ name, email, password }) {
   });
 }
 
-export async function apiLogin({ email, password }) {
-  return fetchJSON(`${BASE}/auth/login`, {
+export async function apiGoogleLogin({ token }) {
+  return fetchJSON(`${BASE}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ token }),
   });
 }
+
 
 export async function apiForgotPassword({ email }) {
   return fetchJSON(`${BASE}/auth/forgot-password`, {

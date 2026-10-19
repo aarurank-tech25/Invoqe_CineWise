@@ -31,6 +31,9 @@ def _load_dotenv():
 _load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Query
+import secrets
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -62,6 +65,7 @@ from src.database import (
     remove_favorite,
     get_favorites,
     get_favorite_count,
+    get_user_by_email,
     create_password_reset_token,
     verify_password_reset_token,
     reset_password_with_token,
@@ -126,6 +130,26 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CineWise API", version="2.0.0", lifespan=lifespan)
+
+# ---------------------------------------------------------------------------
+# Google Auth Helper
+# ---------------------------------------------------------------------------
+from fastapi import Body
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
+import secrets
+
+def _verify_google_token(token: str) -> dict:
+    """Verify Google ID token and return payload.
+    Raises HTTPException on failure.
+    """
+    try:
+        idinfo = google_id_token.verify_oauth2_token(token, google_requests.Request())
+        # Validate audience if needed (optional)
+        return idinfo
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid Google ID token")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -196,6 +220,22 @@ class CatalogRefreshRequest(BaseModel):
 
 # ---------------------------------------------------------------------------
 # Helpers
+
+def _verify_google_token(token: str) -> dict:
+    """Verify Google ID token using google-auth library and return payload.
+    Raises HTTPException 401 on failure."""
+    try:
+        idinfo = google_id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            os.getenv("GOOGLE_CLIENT_ID")
+        )
+        # Verify issuer
+        if idinfo.get("iss") not in ["accounts.google.com", "https://accounts.google.com"]:
+            raise ValueError("Invalid token issuer")
+        return idinfo
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Google token: {e}")
 # ---------------------------------------------------------------------------
 def _get_api_key(override: str = "") -> Optional[str]:
     return get_api_key(override)
@@ -621,6 +661,31 @@ def auth_login(req: AuthLoginRequest):
     if not result["success"]:
         raise HTTPException(status_code=401, detail=result["message"])
     return result
+
+
+@app.post("/api/auth/google")
+def auth_google(token: dict = Body(...)):
+    """Verify Google ID token and log in or register user.
+    Expects {"credential": "ID_TOKEN"} from Google Identity Services.
+    Returns a response similar to /api/auth/login.
+    """
+    credential = token.get("credential")
+    if not credential:
+        raise HTTPException(status_code=400, detail="Missing Google credential")
+    # Verify token and extract payload
+    idinfo = _verify_google_token(credential)
+    email = idinfo.get("email")
+    name = idinfo.get("name") or "GoogleUser"
+    # Check if user exists
+    user = get_user_by_email(email)
+    if not user:
+        # Register new user with random password (never exposed)
+        random_pw = secrets.token_urlsafe(12)
+        reg_result = register_user(name, email, random_pw)
+        if not reg_result["success"]:
+            raise HTTPException(status_code=500, detail="Failed to create user from Google login")
+        user = get_user_by_email(email)
+    return {"user": user, "message": "Google login successful"}
 
 
 @app.post("/api/auth/forgot-password")

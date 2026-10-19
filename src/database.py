@@ -252,6 +252,17 @@ def login_user(email: str, password: str) -> dict:
         },
     }
 
+def get_user_by_email(email: str) -> dict | None:
+    """Return user dict (id, name, email, created_at) if exists, else None."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, email, created_at FROM users WHERE email = ?", (email.strip().lower(),))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"id": row["id"], "name": row["name"], "email": row["email"], "created_at": row["created_at"]}
+    return None
+
 
 # ---------------------------------------------------------------------------
 # 5. FAVORITES — Add

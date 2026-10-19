@@ -1,4 +1,25 @@
 /* ====================================================================
+/* Added Google Sign-In styling */
+.google-signin-container {
+  display: flex;
+  justify-content: center;
+  margin: 0.5rem 0;
+}
+.google-divider {
+  display: flex;
+  align-items: center;
+  margin: 1rem 0;
+}
+.google-divider hr {
+  flex: 1;
+  border: none;
+  border-top: 1px solid var(--divider-color);
+}
+.google-divider span {
+  margin: 0 0.5rem;
+  color: var(--text-muted);
+}
+
    CineWise — Premium Cinema & AI Recommendation Design System
    Original Visual Identity: Deep Charcoal, Warm White & Amber/Gold
    ==================================================================== */

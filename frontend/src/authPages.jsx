@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth, useToast } from './context';
-import { apiLogin, apiRegister, apiForgotPassword, apiValidateResetToken, apiResetPassword } from './api';
+import { apiLogin, apiRegister, apiForgotPassword, apiValidateResetToken, apiResetPassword, apiGoogleLogin } from './api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Eye Icons for Password Visibility
@@ -118,7 +118,9 @@ function AuthSplitLeft({ quote, description }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. LOGIN PAGE (Split-Screen)
 // ─────────────────────────────────────────────────────────────────────────────
+
 export function LoginPage({ onNavigate, onSuccess }) {
+  const googleButtonRef = useRef(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -128,6 +130,8 @@ export function LoginPage({ onNavigate, onSuccess }) {
 
   const { login } = useAuth();
   const { addToast } = useToast();
+
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -139,26 +143,63 @@ export function LoginPage({ onNavigate, onSuccess }) {
       return;
     }
 
-    setLoading(true);
+    // Proceed with normal login
     try {
       const res = await apiLogin({ email: cleanEmail, password });
       if (res.user) {
-        if (rememberMe) {
-          localStorage.setItem('cw_remember', 'true');
-        } else {
-          localStorage.removeItem('cw_remember');
-        }
         login(res.user);
-        addToast(`Welcome back, ${res.user.name}!`, 'success');
-        if (onSuccess) onSuccess();
-        else onNavigate('recommendations');
+        onSuccess && onSuccess(res.user);
+        addToast({ type: 'success', message: 'Login successful' });
       }
     } catch (err) {
-      setError(err.message || 'Login failed. Please verify your credentials.');
+      setError(err.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+
+  };
+
+  // Handle Google Sign‑In response
+  const handleGoogleResponse = async (response) => {
+    const token = response?.credential;
+    if (!token) return;
+    setLoading(true);
+    try {
+      const res = await apiGoogleLogin({ token });
+      if (res.user) {
+        login(res.user);
+        addToast({ type: 'success', message: 'Signed in with Google' });
+        onSuccess && onSuccess(res.user);
+        onNavigate('recommendations');
+      }
+    } catch (err) {
+      setError(err.message || 'Google sign‑in failed');
     } finally {
       setLoading(false);
     }
   };
+
+    // Initialize Google Sign‑In button
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      console.warn('VITE_GOOGLE_CLIENT_ID not set');
+      return;
+    }
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleResponse,
+      });
+      if (googleButtonRef.current) {
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'filled_black',
+          size: 'large',
+          text: 'continue_with',
+        });
+      }
+    }
+  }, []);
 
   return (
     <div className="auth-split-container">
@@ -250,20 +291,27 @@ export function LoginPage({ onNavigate, onSuccess }) {
               </label>
             </div>
 
-            <button
-              id="btn-login-submit"
-              type="submit"
-              className="btn-primary auth-submit-btn"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner-inline" /> Signing in…
-                </>
-              ) : (
-                'Sign In'
-              )}
-            </button>
+          <div className="google-divider" style={{ display: 'flex', alignItems: 'center', margin: '1rem 0' }}>
+            <hr style={{ flex: 1, borderColor: 'var(--divider-color)' }} />
+            <span style={{ margin: '0 0.5rem', color: 'var(--text-muted)' }}>OR</span>
+            <hr style={{ flex: 1, borderColor: 'var(--divider-color)' }} />
+          </div>
+          <div ref={googleButtonRef} className="google-signin-container" style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}></div>
+
+          <button
+                id="btn-login-submit"
+                type="submit"
+                className="btn-primary auth-submit-btn"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner-inline" /> Signing in…
+                  </>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
           </form>
 
           <div className="auth-switch-row">
@@ -895,6 +943,15 @@ export function ResetPasswordPage({ token: propToken, onNavigate }) {
                 )}
               </button>
             </form>
+
+            {/* OR Divider */}
+            <div className="auth-or-divider">
+              <span className="or-text">OR</span>
+            </div>
+            {/* Google Sign‑In Button */}
+            <div ref={googleButtonRef} className="google-signin-button" />
+
+
 
             <div className="auth-back-nav" style={{ textAlign: 'center', marginTop: 20 }}>
               <button
