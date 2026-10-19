@@ -28,3 +28,4 @@ yarn-error.log*
 *.sqlite3
 .DS_Store
 Thumbs.db
+.streamlit/secrets.toml

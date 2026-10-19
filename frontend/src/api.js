@@ -1,5 +1,5 @@
 // API client — all calls to the FastAPI backend
-const BASE = '/api';
+const BASE = process.env.REACT_APP_BACKEND_URL ? `${process.env.REACT_APP_BACKEND_URL}/api` : '/api';
 
 function getApiKey() {
   return localStorage.getItem('cinewise_api_key') || '';

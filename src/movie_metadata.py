@@ -239,7 +239,7 @@ def get_api_key(explicit_key: Optional[str] = None) -> Optional[str]:
                     return str(st.secrets[skey]).strip()
     except Exception:
         pass
-    env_key = os.environ.get("TMDB_API_KEY") or os.environ.get("TMDB_KEY")
+    env_key = os.environ.get("TMDB_API_KEY") or os.environ.get("TMDB_KEY") or os.environ.get("TMDB_API_READ_ACCESS_TOKEN")
     if env_key and str(env_key).strip():
         return str(env_key).strip()
     return None

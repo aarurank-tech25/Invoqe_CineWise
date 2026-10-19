@@ -561,6 +561,7 @@ export function ExplorePage({ region, onMovieSelect, initialActorFilter = '' }) 
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [detailsModalMovie, setDetailsModalMovie] = useState(null);
   const LIMIT = 24;
 
@@ -602,7 +603,7 @@ export function ExplorePage({ region, onMovieSelect, initialActorFilter = '' }) 
       setMovies(d.movies || []);
       setTotal(d.total || 0);
     })
-      .catch(() => {})
+      .catch(e => { console.error('Explore load error', e); setError(e.message || 'Failed to load movies'); })
       .finally(() => setLoading(false));
   }, [query, lang, genre, actor, eraIdx, ratingIdx, sortBy, offset]);
 
@@ -757,6 +758,12 @@ export function ExplorePage({ region, onMovieSelect, initialActorFilter = '' }) 
         {loading && (
           <div className="loading-row">
             <span className="spinner" /> Loading movie catalog…
+          </div>
+        )}
+        {error && (
+          <div className="alert alert-error" role="alert" style={{ marginTop: 14 }}>
+            <span className="alert-icon">⚠️</span>
+            <div>{error}</div>
           </div>
         )}
 
