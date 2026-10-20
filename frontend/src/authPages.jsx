@@ -179,27 +179,57 @@ export function LoginPage({ onNavigate, onSuccess }) {
     }
   };
 
-    // Initialize Google Sign‑In button
+    // Initialize Google Sign‑In button with script‑load handling
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
       console.warn('VITE_GOOGLE_CLIENT_ID not set');
       return;
     }
-    if (window.google && window.google.accounts && window.google.accounts.id) {
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleGoogleResponse,
-      });
-      if (googleButtonRef.current) {
-        window.google.accounts.id.renderButton(googleButtonRef.current, {
-          theme: 'filled_black',
-          size: 'large',
-          text: 'continue_with',
+    // Helper to initialize the button once the Google script is ready
+    const initGoogle = () => {
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleResponse,
         });
+        if (googleButtonRef.current) {
+          window.google.accounts.id.renderButton(googleButtonRef.current, {
+            theme: 'filled_black',
+            size: 'large',
+            text: 'continue_with',
+          });
+        }
+      }
+    };
+    // If script already loaded, initialise immediately
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      initGoogle();
+    } else {
+      // Attach a listener for the script load event
+      const script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (script) {
+        script.addEventListener('load', initGoogle);
+        // Cleanup listener on unmount
+        return () => script.removeEventListener('load', initGoogle);
+      } else {
+        // Fallback: poll until window.google becomes available (max 5 attempts)
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts += 1;
+          if (window.google && window.google.accounts && window.google.accounts.id) {
+            clearInterval(interval);
+            initGoogle();
+          } else if (attempts >= 5) {
+            clearInterval(interval);
+            console.error('Google Identity Services script failed to load');
+          }
+        }, 500);
+        return () => clearInterval(interval);
       }
     }
   }, []);
+
 
   return (
     <div className="auth-split-container">
@@ -291,12 +321,12 @@ export function LoginPage({ onNavigate, onSuccess }) {
               </label>
             </div>
 
-          <div className="google-divider" style={{ display: 'flex', alignItems: 'center', margin: '1rem 0' }}>
-            <hr style={{ flex: 1, borderColor: 'var(--divider-color)' }} />
-            <span style={{ margin: '0 0.5rem', color: 'var(--text-muted)' }}>OR</span>
-            <hr style={{ flex: 1, borderColor: 'var(--divider-color)' }} />
+          <div className="google-divider">
+            <hr />
+            <span>OR</span>
+            <hr />
           </div>
-          <div ref={googleButtonRef} className="google-signin-container" style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}></div>
+          <div ref={googleButtonRef} className="google-signin-container"></div>
 
           <button
                 id="btn-login-submit"
