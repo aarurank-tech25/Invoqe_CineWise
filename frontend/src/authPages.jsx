@@ -121,6 +121,8 @@ function AuthSplitLeft({ quote, description }) {
 
 export function LoginPage({ onNavigate, onSuccess }) {
   const googleButtonRef = useRef(null);
+  // Ref so GIS callback always calls the latest handler (avoids stale closure)
+  const handleGoogleResponseRef = useRef(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -149,7 +151,7 @@ export function LoginPage({ onNavigate, onSuccess }) {
       if (res.user) {
         login(res.user);
         onSuccess && onSuccess(res.user);
-        addToast({ type: 'success', message: 'Login successful' });
+        addToast('Login successful', 'success');
       }
     } catch (err) {
       setError(err.message || 'Login failed');
@@ -159,76 +161,91 @@ export function LoginPage({ onNavigate, onSuccess }) {
 
   };
 
-  // Handle Google Sign‑In response
+  // Handle Google Sign-In response
   const handleGoogleResponse = async (response) => {
     const token = response?.credential;
     if (!token) return;
     setLoading(true);
+    setError('');
     try {
       const res = await apiGoogleLogin({ token });
       if (res.user) {
+        // Save auth state first, then navigate via onSuccess callback
         login(res.user);
-        addToast({ type: 'success', message: 'Signed in with Google' });
-        onSuccess && onSuccess(res.user);
-        onNavigate('recommendations');
+        addToast('Signed in with Google', 'success');
+        // onSuccess is provided by App.jsx and calls navigateTo('recommendations')
+        // Do NOT also call onNavigate here — that causes a double-navigation race
+        // that briefly renders the recommendations page before auth state propagates
+        if (onSuccess) onSuccess(res.user);
+      } else {
+        setError('Google sign-in failed: unexpected response');
       }
     } catch (err) {
-      setError(err.message || 'Google sign‑in failed');
+      setError(err.message || 'Google sign-in failed');
     } finally {
       setLoading(false);
     }
   };
 
-    // Initialize Google Sign‑In button with script‑load handling
+  // Keep the ref pointing to the latest handler (must run after every render)
+  handleGoogleResponseRef.current = handleGoogleResponse;
+
+  // Initialize Google Sign-In button — runs once on mount
+  // Uses ref so the callback never goes stale
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
-      console.warn('VITE_GOOGLE_CLIENT_ID not set');
+      console.warn('VITE_GOOGLE_CLIENT_ID not set — Google Sign-In will not appear');
       return;
     }
-    // Helper to initialize the button once the Google script is ready
+
+    // Wrapper that always calls the latest handleGoogleResponse via ref
+    const stableCallback = (response) => {
+      if (handleGoogleResponseRef.current) handleGoogleResponseRef.current(response);
+    };
+
     const initGoogle = () => {
-      if (window.google && window.google.accounts && window.google.accounts.id) {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: handleGoogleResponse,
+      if (!window.google?.accounts?.id) return;
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: stableCallback,
+      });
+      if (googleButtonRef.current) {
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'filled_black',
+          size: 'large',
+          text: 'continue_with',
         });
-        if (googleButtonRef.current) {
-          window.google.accounts.id.renderButton(googleButtonRef.current, {
-            theme: 'filled_black',
-            size: 'large',
-            text: 'continue_with',
-          });
-        }
       }
     };
+
     // If script already loaded, initialise immediately
-    if (window.google && window.google.accounts && window.google.accounts.id) {
+    if (window.google?.accounts?.id) {
       initGoogle();
-    } else {
-      // Attach a listener for the script load event
-      const script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
-      if (script) {
-        script.addEventListener('load', initGoogle);
-        // Cleanup listener on unmount
-        return () => script.removeEventListener('load', initGoogle);
-      } else {
-        // Fallback: poll until window.google becomes available (max 5 attempts)
-        let attempts = 0;
-        const interval = setInterval(() => {
-          attempts += 1;
-          if (window.google && window.google.accounts && window.google.accounts.id) {
-            clearInterval(interval);
-            initGoogle();
-          } else if (attempts >= 5) {
-            clearInterval(interval);
-            console.error('Google Identity Services script failed to load');
-          }
-        }, 500);
-        return () => clearInterval(interval);
-      }
+      return;
     }
-  }, []);
+
+    // Attach a listener for the script load event
+    const script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if (script) {
+      script.addEventListener('load', initGoogle);
+      return () => script.removeEventListener('load', initGoogle);
+    }
+
+    // Fallback: poll until window.google becomes available (max 10 × 500 ms)
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts += 1;
+      if (window.google?.accounts?.id) {
+        clearInterval(interval);
+        initGoogle();
+      } else if (attempts >= 10) {
+        clearInterval(interval);
+        console.error('Google Identity Services script failed to load');
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   return (
