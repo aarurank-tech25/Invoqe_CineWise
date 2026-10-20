@@ -139,16 +139,7 @@ from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 import secrets
 
-def _verify_google_token(token: str) -> dict:
-    """Verify Google ID token and return payload.
-    Raises HTTPException on failure.
-    """
-    try:
-        idinfo = google_id_token.verify_oauth2_token(token, google_requests.Request())
-        # Validate audience if needed (optional)
-        return idinfo
-    except Exception as e:
-        raise HTTPException(status_code=401, detail="Invalid Google ID token")
+# _verify_google_token is defined below with full audience + issuer validation
 
 
 app.add_middleware(
@@ -666,15 +657,19 @@ def auth_login(req: AuthLoginRequest):
 @app.post("/api/auth/google")
 def auth_google(token: dict = Body(...)):
     """Verify Google ID token and log in or register user.
-    Expects {"credential": "ID_TOKEN"} from Google Identity Services.
+    Expects {"token": "ID_TOKEN"} from the frontend.
     Returns a response similar to /api/auth/login.
     """
-    credential = token.get("credential")
+    credential = token.get("token") or token.get("credential")
     if not credential:
         raise HTTPException(status_code=400, detail="Missing Google credential")
     # Verify token and extract payload
     idinfo = _verify_google_token(credential)
+    if not idinfo.get("email_verified"):
+        raise HTTPException(status_code=400, detail="Google account email is not verified")
     email = idinfo.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email address")
     name = idinfo.get("name") or "GoogleUser"
     # Check if user exists
     user = get_user_by_email(email)
