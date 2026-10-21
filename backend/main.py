@@ -342,7 +342,7 @@ def search_movies(
     limit: int = Query(default=24, le=100),
     offset: int = Query(default=0),
     api_key: str = Query(default=""),
-):
+    ):
     engine = get_engine()
     resolved_key = _get_api_key(api_key)
     df = engine.df.copy()
