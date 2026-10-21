@@ -398,40 +398,42 @@ def search_movies(
         "oldest": ("release_year", True),
     }
     col, asc = sort_map.get(sort_by, ("popularity", False))
-df = df.sort_values(by=col, ascending=asc)
+    df = df.sort_values(by=col, ascending=asc)
 
-# Enrich local results (apply rating filter if needed)
-local_enriched: List[Dict[str, Any]] = []
-for _, row in df.iterrows():
-    meta = get_movie_metadata(int(row["id"]), local_data=row, api_key=resolved_key, region="IN")
-    enriched = _enrich_meta(meta)
-    # Respect the minimum rating filter for enriched local items
-    if min_rating is not None and min_rating > 0 and float(enriched.get("vote_average", 0)) < float(min_rating):
-        continue
-    local_enriched.append(enriched)
+    # Enrich local results (apply rating filter if needed)
+    local_enriched: List[Dict[str, Any]] = []
+    for _, row in df.iterrows():
+        meta = get_movie_metadata(int(row["id"]), local_data=row, api_key=resolved_key, region="IN")
+        enriched = _enrich_meta(meta)
+        # Respect the minimum rating filter for enriched local items
+        if min_rating is not None and min_rating > 0 and float(enriched.get("vote_average", 0)) < float(min_rating):
+            continue
+        local_enriched.append(enriched)
 
-# Fetch TMDB results when a query is provided and API key is configured
-# We request enough extra hits to fill pagination after merging (limit + offset)
-# This avoids a second pagination pass on the combined list.
+    # Fetch TMDB results when a query is provided and API key is configured
+    # We request enough extra hits to fill pagination after merging (limit + offset)
+    # This avoids a second pagination pass on the combined list.
 
-tmdb_extra: List[Dict[str, Any]] = []
-if q.strip() and resolved_key:
-    extra_limit = limit + offset
-    raw_hits = search_tmdb_movies_multi(q.strip(), api_key=resolved_key, limit=extra_limit)
-    if raw_hits:
-        tmdb_extra = [_enrich_meta(m) for m in raw_hits]
+    tmdb_extra: List[Dict[str, Any]] = []
+    if q.strip() and resolved_key:
+        extra_limit = limit + offset
+        raw_hits = search_tmdb_movies_multi(q.strip(), api_key=resolved_key, limit=extra_limit)
+        if raw_hits:
+            tmdb_extra = [_enrich_meta(m) for m in raw_hits]
 
-# Remove duplicates – keep local catalog entries first
-local_ids = {m.get("id") for m in local_enriched}
-filtered_tmdb = [m for m in tmdb_extra if m.get("id") not in local_ids]
+    # Remove duplicates – keep local catalog entries first
+    local_ids = {m.get("id") for m in local_enriched}
+    filtered_tmdb = [m for m in tmdb_extra if m.get("id") not in local_ids]
 
-# Combine preserving order: local first, then TMDB uniques
-combined = local_enriched + filtered_tmdb
+    # Combine preserving order: local first, then TMDB uniques
+    combined = local_enriched + filtered_tmdb
 
-total = len(combined)
-paginated = combined[offset: offset + limit]
+    total = len(combined)
+    paginated = combined[offset: offset + limit]
 
-return {"total": total, "offset": offset, "limit": limit, "movies": paginated}
+    return {"total": total, "offset": offset, "limit": limit, "movies": paginated}
+
+
 
 
 @app.get("/api/movie/{movie_id}")
