@@ -46,11 +46,28 @@ export function WatchedBtn({ movieId, movieTitle }) {
 // Poster Image with Consistent 2:3 Portrait Aspect Ratio and Fallback
 // ─────────────────────────────────────────────────────────────────────────────
 export const Poster = memo(function Poster({ url, title, width, height, className = 'poster-frame' }) {
-  const [failed, setFailed] = useState(false);
+  const [imgSrc, setImgSrc] = useState(url);
+  const [hasError, setHasError] = useState(false);
 
-  // A URL is only valid if it's a real http(s) string, not "null"/"None"/etc.
+  // Determine if the initial URL is valid
   const bad = new Set(['', 'null', 'undefined', 'nan', 'none', '<na>', 'nat']);
-  const isValid = url && typeof url === 'string' && !bad.has(url.trim().toLowerCase()) && url.trim().startsWith('http');
+  const isValidInitial = url && typeof url === 'string' && !bad.has(url.trim().toLowerCase()) && url.trim().startsWith('http');
+
+  // Fallback asset path (placed in public folder)
+  const fallbackSrc = 'file:///C:/Users/Aceus/.gemini/antigravity-ide/brain/5035738a-bb5b-4ea5-8900-8afa3b508a8b/poster_placeholder_1792679284214.jpg';
+
+  // If the URL is invalid from the start, use fallback immediately
+  if (!isValidInitial && !hasError) {
+    setImgSrc(fallbackSrc);
+    setHasError(true);
+  }
+
+  const handleError = () => {
+    if (!hasError) {
+      setImgSrc(fallbackSrc);
+      setHasError(true);
+    }
+  };
 
   const style = {};
   if (width) style.width = width;
@@ -58,20 +75,13 @@ export const Poster = memo(function Poster({ url, title, width, height, classNam
 
   return (
     <div className={className} style={style}>
-      {isValid && !failed ? (
-        <img
-          className="poster-img"
-          src={url}
-          alt={title ? `${title} poster` : 'Movie poster'}
-          loading="lazy"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <div className="poster-placeholder">
-          <div className="poster-placeholder-icon">🎬</div>
-          {title && <div className="poster-placeholder-text">{title}</div>}
-        </div>
-      )}
+      <img
+        className="poster-img"
+        src={imgSrc}
+        alt={title ? `${title} poster` : 'Movie poster'}
+        loading="lazy"
+        onError={handleError}
+      />
     </div>
   );
 });
